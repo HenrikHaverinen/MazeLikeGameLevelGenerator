@@ -1,6 +1,6 @@
-using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 public class DFS : MonoBehaviour
 {
@@ -9,8 +9,8 @@ public class DFS : MonoBehaviour
     List<Node> BranchingNodes = new List<Node>(); // list of nodes to return to in case of a dead end
     Path_ path = new Path_(); // The path that is formed by the depth-first-search
 
-    List<Node> disjointGraph = new List<Node>(); // holds the data for the entire disjoint graph
-    public List<List<Node>> disjointGraphs = new List<List<Node>>();
+    List<Node> tree = new List<Node>(); // holds the data for the entire tree
+    public List<List<Node>> trees = new List<List<Node>>();
 
     bool cycleExists = false; // to determine whether a cycle was found or not
     bool endSearch = false; // determine whether to keep searching or not
@@ -20,14 +20,30 @@ public class DFS : MonoBehaviour
 
     List<Node> CycleBetween = new List<Node>(); // The nodes that form the link that forms the cycle
 
-    // Returns a path that contains every node connected to the start node
-    public List<List<Node>> GetDisjointGraphs()
+    public bool autoCheckCompletion = false;
+    bool endCheckCanComplete = false; // determines whether to run CheckCanComplete method or not
+    bool canComplete = false; // can the level be completed
+
+    Path_ completionPath = new Path_();
+
+    private void Update()
     {
-        List<List<Node>> allDisjointGraphs = new List<List<Node>>();
+        // Check automatically whether the level can be completed or not
+        if (GameObject.Find("Subgraph") != null && endCheckCanComplete == false && autoCheckCompletion)
+        {
+            GameObject.Find("PerformanceTrackerDFS").GetComponent<PerformanceTracker>().StartTracking();
+            CheckCanComplete();
+        }
+    }
+
+    // Returns a path that contains every node connected to the start node
+    public List<List<Node>> GetTrees()
+    {
+        List<List<Node>> allTrees = new List<List<Node>>();
 
         path.nodes.Clear();
-        disjointGraph.Clear();
-        disjointGraphs.Clear();
+        tree.Clear();
+        trees.Clear();
         endSearch = false;
         BranchingNodes.Clear();
 
@@ -57,7 +73,7 @@ public class DFS : MonoBehaviour
             {
                 List<Node> singular = new List<Node>();
                 singular.Add(n);
-                allDisjointGraphs.Add(singular);
+                allTrees.Add(singular);
 
                 n.explored = true;
             }
@@ -72,28 +88,28 @@ public class DFS : MonoBehaviour
                 {
                     ExploreNodeIgnoreCycle(unexplored[Random.Range(0, unexplored.Count)]); // Explore an unexplored node
 
-                    // add the disjoint graph
-                    List<Node> tempList = disjointGraph.Distinct().ToList();
-                    allDisjointGraphs.Add(tempList);
+                    // add the tree
+                    List<Node> tempList = tree.Distinct().ToList();
+                    allTrees.Add(tempList);
 
-                    disjointGraph.Clear(); // clear the disjoint graph
-                    disjointGraph = new List<Node>();
+                    tree.Clear(); // clear the tree
+                    tree = new List<Node>();
                 }
                 else { endSearch = true; }
             }
             else { endSearch = true; }
         }
 
-        disjointGraphs = allDisjointGraphs;
+        trees = allTrees;
 
-        return allDisjointGraphs;
+        return allTrees;
     }
 
     void ExploreNodeIgnoreCycle(Node node) // Explore the node, dont mind cycles
     {
         node.explored = true;
 
-        disjointGraph.Add(node); // Add also to disjointGraph
+        tree.Add(node); // Add also to tree
 
         // Set the node as branching if node has multiple links
         if (node.links.Where(x => x.explored == false).ToList().Count > 1)
@@ -136,7 +152,7 @@ public class DFS : MonoBehaviour
     {
         node.explored = true;
 
-        disjointGraph.Add(node); // Add also to disjointGraph
+        tree.Add(node); // Add also to tree
 
         // Set the node as branching if node has multiple links
         if (node.links.Where(x => x.explored == false).ToList().Count > 1)
@@ -443,5 +459,104 @@ public class DFS : MonoBehaviour
             if (item.links.Count > 0) { return true; }
         }
         return false;
+    }
+
+    // Check that the level can be completed
+    void CheckCanComplete()
+    {
+        endCheckCanComplete = true;
+        path.nodes.Clear();
+        BranchingNodes.Clear();
+
+        nodes = GameObject.Find("Subgraph").GetComponent<Graph>().nodes;
+
+        // unexplore the nodes
+        foreach (var item in nodes)
+        {
+            item.explored = false;
+            foreach (var link in item.links)
+            {
+                link.explored = false;
+            }
+        }
+
+        Node start = nodes.Where(x => x.nature == Node.Nature.Start).FirstOrDefault(); // start node
+
+        ExploreNodeForCompletion(start); // begin DFS
+
+        // performance
+        GameObject.Find("PerformanceTrackerDFS").GetComponent<PerformanceTracker>().EndTracking();
+
+        Debug.Log("Level can be completed: " + canComplete);
+        if (canComplete)
+        {
+            string completionPathStr = "";
+            foreach (var item in completionPath.nodes)
+            {
+                completionPathStr += item + ", ";
+            }
+            Debug.Log("Completion path: " + completionPathStr);
+        }
+    }
+
+    void ExploreNodeForCompletion(Node node) // Explore the node
+    {
+        node.explored = true;
+
+        if (completionPath.nodes.Count == 0) // update path until completion path is found
+        {
+            path.nodes.Add(node); // Add the node to the path
+        }
+
+        if (node.nature == Node.Nature.End) // can complete if node is the end
+        {
+            canComplete = true;
+            completionPath.nodes = path.nodes;
+        }
+
+        // Set the node as branching if node has multiple links
+        if (node.links.Where(x => x.explored == false).ToList().Count > 1)
+        {
+            if (!BranchingNodes.Contains(node)) // dont add same node multiple times
+            {
+                BranchingNodes.Add(node); // Node has multiple links
+            }
+        }
+
+        // debug the nodes of the path formed by this method
+        //string pathstr = "";
+        //foreach (var item in path.nodes)
+        //{
+        //    pathstr += item + ", ";
+        //}
+        //Debug.Log(pathstr);
+
+        if (!canComplete) // completion path not found yet, keep searching
+        {
+            // Select one of the links of the node and explore the node on the other end
+            // Explore the links
+            foreach (var item in node.links.Where(x => x.explored == false))
+            {
+                if (item.nodes[0] != node)
+                {
+                    ExploreLink(item.nodes[0], item.nodes[1]);
+                    ExploreNodeForCompletion(item.nodes[0]); // Enter the new node in search
+                }
+                if (item.nodes[1] != node)
+                {
+                    ExploreLink(item.nodes[0], item.nodes[1]);
+                    ExploreNodeForCompletion(item.nodes[1]); // Enter the new node in search
+                }
+            }
+
+            // if the node doesnt have any links, it is going to automatically return to the last branching node, but the path from that branching node to the dead end must be cleared before returning
+            DeadEnd();
+
+            if (BranchingNodes.Contains(node) && node.links.Where(x => x.explored == true).ToList().Count == node.links.Count) // Remove the node as a branching node when all of its links have been explored
+            {
+                BranchingNodes.Remove(node);
+                DeadEnd();
+            }
+        }
     }
 }

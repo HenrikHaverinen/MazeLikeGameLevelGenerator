@@ -13,6 +13,9 @@ public class Kruskal : MonoBehaviour
 
     public void ExecuteAlgorithm()
     {
+        // performance
+        GameObject.Find("PerformanceTrackerMazeGen").GetComponent<PerformanceTracker>().StartTracking();
+
         // Get a copy of the links that exist in the graph we want to run the algorithm on
         LinksOriginalGraph = Graph.GetComponent<Graph>().links;
 
@@ -41,18 +44,33 @@ public class Kruskal : MonoBehaviour
             }
         }
 
-        Debug.Log("MST: ");
-        foreach (var item in Links.Distinct().ToList())
+        //Debug.Log("MST: ");
+        //foreach (var item in Links.Distinct().ToList())
+        //{
+        //    Debug.Log(item.nodes[0] + "-" + item.nodes[1]);
+        //}
+
+        // performance
+        GameObject.Find("PerformanceTrackerMazeGen").GetComponent<PerformanceTracker>().EndTracking();
+
+        // add the subgraph links back to the nodes before creating MST_subgraph
+        foreach (var item in Nodes)
         {
-            Debug.Log(item.nodes[0] + "-" + item.nodes[1]);
+            foreach (var l in Links.Where(x => x.nodes.Contains(item)))
+            {
+                if (!item.links.Contains(l))
+                {
+                    item.links.Add(l);
+                }
+            }
         }
 
         // Create the subgraph gameobject
         SubGraph = new GameObject();
-        SubGraph.name = "MST_subgraph";
+        SubGraph.name = "Subgraph";
         SubGraph.AddComponent<Graph>();
         SubGraph.GetComponent<Graph>().nodes = Nodes;
-        SubGraph.GetComponent<Graph>().links = Links;
+        SubGraph.GetComponent<Graph>().links = Links.Distinct().ToList();
         SubGraph.GetComponent<Graph>().GenerateMaze();
     }
 

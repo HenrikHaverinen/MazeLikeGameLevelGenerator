@@ -2,15 +2,8 @@ using UnityEngine;
 
 public class Wall : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    private void Awake()
     {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
+        Physics.IgnoreLayerCollision(10, 10, true); // walls dont physically interact with other walls
     }
 }

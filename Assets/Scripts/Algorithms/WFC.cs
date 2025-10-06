@@ -14,7 +14,7 @@ public class WFC : MonoBehaviour
     public GameObject Subgraph; // the subgraph which this algorithm forms
     public GameObject Empty; // Empty gameobject for holding data during simulation
 
-    List<List<Node>> disjointGraphs = new List<List<Node>>();
+    List<List<Node>> trees = new List<List<Node>>();
     Path_ mergeGraph = new Path_();
 
     List<Node> AllObservedNodes = new List<Node>();
@@ -27,6 +27,9 @@ public class WFC : MonoBehaviour
 
     public void ExecuteAlgorithm()
     {
+        // performance
+        GameObject.Find("PerformanceTrackerMazeGen").GetComponent<PerformanceTracker>().StartTracking();
+
         foreach (Transform c in this.Grid.transform)
         {
             if (c.GetComponent<WFC_Cell>() != null)
@@ -85,7 +88,7 @@ public class WFC : MonoBehaviour
                 item.UpdateLinks();
             }
 
-            UpdateDisjointGraphs(); // Update the disjointed subgraphs
+            UpdateTrees(); // Update the trees that exist within the subgraph
 
             CycleCheck();
 
@@ -97,9 +100,12 @@ public class WFC : MonoBehaviour
             }
         }
 
+        // performance
+        GameObject.Find("PerformanceTrackerMazeGen").GetComponent<PerformanceTracker>().EndTracking();
+
         // Create the subgraph gameobject, add the graph component and add the nodes and the links
         var subg = Instantiate(Empty);
-        subg.name = "Subgraph_WFC";
+        subg.name = "Subgraph";
         subg.AddComponent<Graph>();
         subg.GetComponent<Graph>().nodes = AllObservedNodes;
         foreach (var item in subg.GetComponent<Graph>().nodes)
@@ -112,8 +118,8 @@ public class WFC : MonoBehaviour
         Subgraph = subg;
     }
 
-    // Get all of the disjointed graphs
-    void UpdateDisjointGraphs()
+    // Get all of the trees
+    void UpdateTrees()
     {
         foreach (var node in AllObservedNodes)
         {
@@ -126,7 +132,7 @@ public class WFC : MonoBehaviour
         }
 
         dfs.nodes = AllObservedNodes;
-        disjointGraphs = dfs.GetDisjointGraphs();
+        trees = dfs.GetTrees();
     }
 
     void CycleCheck()
@@ -149,11 +155,11 @@ public class WFC : MonoBehaviour
                 Node rootNode = randomCell.GetComponent<Node>();
 
                 // Get the graph that the rootNode belongs to
-                List<Node> disjointGraph = dfs.disjointGraphs.Where(x => x.Where(y => y == rootNode).FirstOrDefault() != null).FirstOrDefault();
+                List<Node> tree = dfs.trees.Where(x => x.Where(y => y == rootNode).FirstOrDefault() != null).FirstOrDefault();
 
-                if (disjointGraph != null)
+                if (tree != null)
                 {
-                    mergeGraph.nodes.AddRange(disjointGraph);
+                    mergeGraph.nodes.AddRange(tree);
                     mergeGraph.nodes = mergeGraph.nodes.Distinct().ToList();
 
                     // unexplore the links and nodes
@@ -172,7 +178,7 @@ public class WFC : MonoBehaviour
                         }
                     }
 
-                    foreach (var item in disjointGraph)
+                    foreach (var item in tree)
                     {
                         item.explored = false;
 
@@ -185,11 +191,11 @@ public class WFC : MonoBehaviour
                     // The neighbouring cells that meet the conditions for expanding towards each other (key= neighbour, value=cell(neighbour of neighbour))
                     Dictionary<WFC_Cell, WFC_Cell> qualifyingNeighbours = new Dictionary<WFC_Cell, WFC_Cell>();
 
-                    // loop through the observed cells which are included in the disjoint graph
+                    // loop through the observed cells which are included in the tree
                     foreach (var cell in ObservedCells)
                     {
-                        // loop through the links of the observed cell which include a node that is part of the disjoint graph, this is to guarantee that the cell is part of the disjoint graph
-                        foreach (var link in cell.GetComponent<WFC_Cell>().GetComponent<Node>().links.Where(x => disjointGraph.Contains(x.nodes[0]) || disjointGraph.Contains(x.nodes[1])))
+                        // loop through the links of the observed cell which include a node that is part of the tree, this is to guarantee that the cell is part of the tree
+                        foreach (var link in cell.GetComponent<WFC_Cell>().GetComponent<Node>().links.Where(x => tree.Contains(x.nodes[0]) || tree.Contains(x.nodes[1])))
                         {
                             // each unobserved neighbour of the cell
                             foreach (var neighbour in cell.GetComponent<WFC_Cell>().neighbours.Where(x => x.GetComponent<WFC_Cell>().Observed == false))
@@ -239,7 +245,7 @@ public class WFC : MonoBehaviour
                         }
                     }
 
-                    // Simulate adding final state for each cell that is neighbouring the disjoint graph
+                    // Simulate adding final state for each cell that is neighbouring the tree
                     foreach (var item in qualifyingNeighbours)
                     {
                         CheckCycle(item.Key);
@@ -311,8 +317,8 @@ public class WFC : MonoBehaviour
             }
         }
 
-        // Key = Disjoint graph, Value = amount of links to disjoint graph from simulated node
-        Dictionary<List<Node>, int> linksToDisjointGraph = new Dictionary<List<Node>, int>();
+        // Key = Tree, Value = amount of links to tree from simulated node
+        Dictionary<List<Node>, int> linksToTree = new Dictionary<List<Node>, int>();
 
         foreach (var link in simNode.links)
         {
@@ -321,21 +327,21 @@ public class WFC : MonoBehaviour
             if (link.nodes[0] != simNode) { linkedTo = link.nodes[0]; }
             if (link.nodes[1] != simNode) { linkedTo = link.nodes[1]; }
 
-            List<Node> dg = disjointGraphs.Where(x => x.Where(x => x == linkedTo).FirstOrDefault() != null).FirstOrDefault();
+            List<Node> t = trees.Where(x => x.Where(x => x == linkedTo).FirstOrDefault() != null).FirstOrDefault();
 
-            if (dg.Contains(linkedTo))
+            if (t.Contains(linkedTo))
             {
-                if (!linksToDisjointGraph.Keys.Contains(dg)) { linksToDisjointGraph.Add(dg, 1); }
-                else { linksToDisjointGraph[dg]++; } // increment int signifying the amount of links to the graph
+                if (!linksToTree.Keys.Contains(t)) { linksToTree.Add(t, 1); }
+                else { linksToTree[t]++; } // increment int signifying the amount of links to the graph
             }
         }
 
         Debug.Log("Cycle check for " + simNode);
 
-        while (linksToDisjointGraph.ContainsValue(2) || linksToDisjointGraph.ContainsValue(3) || linksToDisjointGraph.ContainsValue(4))
+        while (linksToTree.ContainsValue(2) || linksToTree.ContainsValue(3) || linksToTree.ContainsValue(4))
         {
-            // Loop through each disjoint graph that has multiple links to the simulated node
-            foreach (var g in linksToDisjointGraph.Where(x => x.Value > 1).ToList())
+            // Loop through each tree that has multiple links to the simulated node
+            foreach (var g in linksToTree.Where(x => x.Value > 1).ToList())
             {
                 // loop through the nodes linked to the simulated node
                 foreach (var n in linkedNodes)
@@ -344,11 +350,11 @@ public class WFC : MonoBehaviour
                     if (g.Key.Contains(n.Key))
                     {
                         // leave at most 1 link from simulated node to the same graph
-                        if (linksToDisjointGraph[g.Key] > 1)
+                        if (linksToTree[g.Key] > 1)
                         {
                             cell.expansionDirections.Remove(n.Value);
                             cell.blockExpansionDirections.Add(n.Value);
-                            linksToDisjointGraph[g.Key]--;
+                            linksToTree[g.Key]--;
                         }
                     }
                 }
@@ -375,13 +381,13 @@ public class WFC : MonoBehaviour
 
             if (randomCell != null)
             {
-                List<Node> dg = new List<Node>();
+                List<Node> t = new List<Node>();
                 Node rootNode = randomCell.GetComponent<Node>();
 
                 // Get the graph based on the rootNode
-                dg = dfs.disjointGraphs.Where(x => x.Contains(rootNode)).FirstOrDefault();
+                t = dfs.trees.Where(x => x.Contains(rootNode)).FirstOrDefault();
 
-                mergeGraph.nodes.AddRange(dg);
+                mergeGraph.nodes.AddRange(t);
                 mergeGraph.nodes = mergeGraph.nodes.Distinct().ToList();
 
                 // unexplore the links and nodes
@@ -397,7 +403,7 @@ public class WFC : MonoBehaviour
                 Dictionary<WFC_Cell, WFC_Cell> qualifyingNeighbours = new Dictionary<WFC_Cell, WFC_Cell>();
 
                 // loop through every neighbour, of every node in the graph
-                foreach (var item in dg)
+                foreach (var item in t)
                 {
                     var cell = item.gameObject;
 
@@ -468,7 +474,7 @@ public class WFC : MonoBehaviour
 
                     // Create links for the neighbour, to keep track of all the possible nodes to expand towards
                     // Links from the neighbour to each of its possible expansion direction
-                    // For neighbouring disjoint graphs with links from cell, force the mustExpansionDirection
+                    // For neighbouring trees with links from cell, force the mustExpansionDirection
                     // Also add one random mustChoiceExpansionDirection, that is towards an unobserved cell
                     // Create links to each neighbour of this neighbour when expansion directions allow it
                     foreach (var n in thisCell.neighbours)

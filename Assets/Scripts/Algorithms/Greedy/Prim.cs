@@ -12,6 +12,9 @@ public class Prim : MonoBehaviour
 
     public void ExecuteAlgorithm()
     {
+        // performance
+        GameObject.Find("PerformanceTrackerMazeGen").GetComponent<PerformanceTracker>().StartTracking();
+
         // Get a copy of the links that exist in the graph we want to run the algorithm on
         LinksOriginalGraph = Graph.GetComponent<Graph>().links;
 
@@ -50,9 +53,26 @@ public class Prim : MonoBehaviour
             }
         }
 
+        // performance
+        GameObject.Find("PerformanceTrackerMazeGen").GetComponent<PerformanceTracker>().EndTracking();
+
+        // only include the subgraph links for the nodes
+        foreach (var item in Nodes)
+        {
+            List<Link> toRemove = new List<Link>();
+            foreach (var link in item.links)
+            {
+                if (!Links.Contains(link))
+                {
+                    toRemove.Add(link);
+                }
+            }
+            item.links = item.links.Except(toRemove).ToList();
+        }
+
         // Create the subgraph gameobject
         SubGraph = new GameObject();
-        SubGraph.name = "MST_subgraph";
+        SubGraph.name = "Subgraph";
         SubGraph.AddComponent<Graph>();
         SubGraph.GetComponent<Graph>().nodes = Nodes;
         SubGraph.GetComponent<Graph>().links = Links;
